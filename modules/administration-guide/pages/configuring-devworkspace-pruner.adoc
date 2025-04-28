@@ -1,0 +1,63 @@
+:_content-type: PROCEDURE
+:description: Configuring the DevWorkspace pruner to automatically remove inactive workspaces.
+:keywords: administration guide, devworkspace, pruner, cleanup, operator, config
+:navtitle: Configuring DevWorkspace pruner
+
+[id="configuring-devworkspace-pruner_{context}"]
+= Configuring DevWorkspace pruner
+
+Learn how to configure the automatic pruning (removal) of inactive DevWorkspaces using the DevWorkspace Operator Config (DWOC). This feature helps manage resources by removing DevWorkspaces that have not been started for a configurable period.
+
+The DevWorkspace pruner behavior is controlled through the `config.workspace.cleanupCronJob` section within the `DevWorkspaceOperatorConfig` custom resource, typically named `devworkspace-operator-config` in the `devworkspace-controller` namespace.
+
+By default, the DevWorkspace pruner is disabled.
+
+.Procedure
+
+. Enable and configure the DevWorkspace pruner by patching the `DevWorkspaceOperatorConfig` resource.
++
+--
+You can set the following parameters within the `cleanupCronJob` section:
+
+*   `enable`: Set to `true` to enable the pruner, `false` to disable it. Default: `false`.
+*   `schedule`: A cron expression defining how often the pruner job runs. For example, `"* * * * *"` runs the job every minute, while `"0 0 * * *"` runs it daily at midnight.
+*   `retainTime`: The duration in minutes for which an unstarted DevWorkspace is kept before being pruned. For example, a value of `60` means DevWorkspaces that haven't been started in the last 60 minutes are eligible for pruning.
+*   `dryRun`: Set to `true` to run the pruner in a dry-run mode. In this mode, the pruner logs which DevWorkspaces would be pruned but does not actually delete them. Set to `false` to perform the actual deletion. Default: `false`.
+
+Example command to enable the pruner, set it to run every minute, retain inactive workspaces for 60 minutes, and initially run in dry-run mode:
++
+[source,bash,subs="+quotes,+attributes,+macros"]
+----
+kubectl patch DevWorkspaceOperatorConfig devworkspace-operator-config \
+  -n devworkspace-controller \
+  --type=merge \
+  -p '{"config": {"workspace": {"cleanupCronJob": {"enable": true, "dryRun": true, "retainTime": 60, "schedule": "* * * * *"}}}}'
+----
+--
+
+. (Optional) Verify the pruner's actions in dry-run mode.
++
+--
+a. Let the pruner run according to its schedule (wait for at least one minute in the example above).
+b. Check the DevWorkspace Operator logs for messages indicating which DevWorkspaces were identified for pruning.
++
+[source,bash]
+----
+kubectl logs -n devworkspace-controller -l app.kubernetes.io/component=devworkspace-controller-manager --tail=100 | grep "Dry run: would prune DevWorkspace"
+----
+--
+
+. Disable dry-run mode to activate pruning.
++
+--
+Once you have verified the dry-run output and are satisfied with the configuration, patch the `DevWorkspaceOperatorConfig` again to set `dryRun` to `false`.
++
+[source,bash,subs="+quotes,+attributes,+macros"]
+----
+kubectl patch DevWorkspaceOperatorConfig devworkspace-operator-config \
+  -n devworkspace-controller \
+  --type=merge \
+  -p '{"config": {"workspace": {"cleanupCronJob": {"dryRun": false }}}}'
+----
+Inactive DevWorkspaces will now be deleted according to the configured `retainTime` and `schedule`.
+--
